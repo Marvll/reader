@@ -21,6 +21,7 @@ import com.htmake.reader.api.controller.RssSourceController
 import com.htmake.reader.api.controller.UserController
 import com.htmake.reader.api.controller.WebdavController
 import com.htmake.reader.api.controller.ReplaceRuleController
+import com.htmake.reader.api.controller.BookmarkController
 import com.htmake.reader.utils.error
 import com.htmake.reader.utils.success
 import com.htmake.reader.utils.getStorage
@@ -133,6 +134,7 @@ class YueduApi : RestVerticle() {
             onHandlerError(ctx, error)
         }
         val replaceRuleController = ReplaceRuleController(coroutineContext)
+        val bookmarkController = BookmarkController(coroutineContext)
 
         /** 书源模块 */
         router.post("/reader3/saveBookSource").coroutineHandler { bookSourceController.saveBookSource(it) }
@@ -254,6 +256,10 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
         router.get("/reader3/exportBook").coroutineHandlerWithoutRes { bookController.exportBook(it) }
 
+        // 全文搜索
+        router.get("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
+        router.post("/reader3/searchBookContent").coroutineHandler { bookController.searchBookContent(it) }
+
         /** 用户模块 */
         // 上传文件
         router.post("/reader3/uploadFile").coroutineHandler { userController.uploadFile(it) }
@@ -333,6 +339,12 @@ class YueduApi : RestVerticle() {
         router.post("/reader3/deleteReplaceRule").coroutineHandler { replaceRuleController.deleteReplaceRule(it) }
         router.post("/reader3/deleteReplaceRules").coroutineHandler { replaceRuleController.deleteReplaceRules(it) }
 
+        /** 书签模块 */
+        router.get("/reader3/getBookmarks").coroutineHandler { bookmarkController.getBookmarks(it) }
+        router.post("/reader3/saveBookmark").coroutineHandler { bookmarkController.saveBookmark(it) }
+        router.post("/reader3/saveBookmarks").coroutineHandler { bookmarkController.saveBookmarks(it) }
+        router.post("/reader3/deleteBookmark").coroutineHandler { bookmarkController.deleteBookmark(it) }
+        router.post("/reader3/deleteBookmarks").coroutineHandler { bookmarkController.deleteBookmarks(it) }
     }
 
     suspend fun setupPort() {

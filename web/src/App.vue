@@ -90,6 +90,19 @@
       v-model="showRssArticleDialog"
       :rssArticleInfo="rssArticleInfo"
     />
+
+    <SearchBookContent
+      v-model="showSearchBookContentDialog"
+      :book="searchBook"
+    />
+
+    <BookmarkForm
+      v-model="showBookmarkForm"
+      :bookmark="bookmark"
+      :isAdd="isAddBookmark"
+    />
+
+    <Bookmark v-model="showBookmarkDialog" :book="bookmarkInBook" />
   </div>
 </template>
 
@@ -108,6 +121,9 @@ import BookGroup from "./components/BookGroup.vue";
 import RssSourceList from "./components/RssSourceList.vue";
 import RssArticleList from "./components/RssArticleList.vue";
 import RssArticle from "./components/RssArticle.vue";
+import SearchBookContent from "./components/SearchBookContent.vue";
+import Bookmark from "./components/Bookmark.vue";
+import BookmarkForm from "./components/BookmarkForm.vue";
 import { CodeJar } from "codejar";
 import Prism from "prismjs";
 import "prismjs/components/prism-json";
@@ -182,7 +198,10 @@ export default {
     BookGroup,
     RssSourceList,
     RssArticleList,
-    RssArticle
+    RssArticle,
+    SearchBookContent,
+    Bookmark,
+    BookmarkForm
   },
   data() {
     return {
@@ -220,7 +239,17 @@ export default {
       showRssArticleDialog: false,
       rssArticleInfo: {},
 
-      isLogin: true
+      showSearchBookContentDialog: false,
+      searchBook: {},
+
+      isLogin: true,
+
+      showBookmarkDialog: false,
+
+      showBookmarkForm: false,
+      bookmark: {},
+      isAddBookmark: true,
+      bookmarkInBook: {}
     };
   },
   beforeCreate() {
@@ -336,6 +365,20 @@ export default {
       this.showRssArticleDialog = true;
       this.rssArticleInfo = rssArticleInfo;
     });
+    eventBus.$on("showSearchBookContentDialog", searchBook => {
+      this.showSearchBookContentDialog = true;
+      this.searchBook = searchBook;
+    });
+    eventBus.$on("showBookmarkForm", (bookmark, isAddBookmark, callback) => {
+      this.bookmark = bookmark;
+      this.isAddBookmark = isAddBookmark;
+      this.bookmarkCallback = callback;
+      this.showBookmarkForm = true;
+    });
+    eventBus.$on("showBookmarkDialog", book => {
+      this.showBookmarkDialog = true;
+      this.bookmarkInBook = book;
+    });
   },
   mounted() {
     document.documentElement.style.setProperty(
@@ -404,6 +447,14 @@ export default {
         if (this.replaceRuleCallback) {
           this.replaceRuleCallback();
           this.replaceRuleCallback = null;
+        }
+      }
+    },
+    showBookmarkForm(val) {
+      if (!val) {
+        if (this.bookmarkCallback) {
+          this.bookmarkCallback();
+          this.bookmarkCallback = null;
         }
       }
     },
@@ -510,7 +561,9 @@ export default {
         // 加载RSS订阅列表
         this.loadRssSources(refresh),
         // 加载替换规则
-        this.loadReplaceRules(refresh)
+        this.loadReplaceRules(refresh),
+        // 加载书签
+        this.loadBookmarks(refresh)
       ]);
       // 加载书架
       this.initing = false;
@@ -666,6 +719,22 @@ export default {
           this.$message.error(
             "加载替换规则失败 " + (error && error.toString())
           );
+        }
+      );
+    },
+    loadBookmarks(refresh) {
+      return cacheFirstRequest(
+        () => Axios.get(this.api + "/getBookmarks"),
+        "bookmark@" + this.currentUserName,
+        refresh
+      ).then(
+        res => {
+          if (res.data.isSuccess) {
+            this.$store.commit("setBookmarks", res.data.data || []);
+          }
+        },
+        error => {
+          this.$message.error("加载书签失败 " + (error && error.toString()));
         }
       );
     },

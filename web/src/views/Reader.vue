@@ -136,56 +136,78 @@
       </div>
     </div>
     <div class="read-bar" :style="rightBarTheme">
-      <div class="float-left-btn-zone">
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="showReadingBookInfo"
-        >
-          <i class="el-icon-info"></i>
+      <div class="float-btn-zone">
+        <div class="float-left-btn-zone">
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="showBookmarkDialog"
+          >
+            <i class="el-icon-collection-tag"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="showSearchBookContentDialog"
+          >
+            <i class="el-icon-search"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="showReadingBookInfo"
+          >
+            <i class="el-icon-info"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toTop(0)"
+            v-if="$store.state.miniInterface"
+          >
+            <i class="el-icon-top"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toBottom(0)"
+            v-if="$store.state.miniInterface"
+          >
+            <i class="el-icon-bottom"></i>
+          </div>
         </div>
-        <div class="float-btn" :style="popupAbsoluteBtnStyle" @click="toTop(0)">
-          <i class="el-icon-top"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="toBottom(0)"
-        >
-          <i class="el-icon-bottom"></i>
-        </div>
-      </div>
-      <div class="float-right-btn-zone">
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="refreshContent"
-        >
-          <i class="el-icon-refresh-right"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="toggleAutoReading()"
-          v-if="!isEpub && !isCarToon && !isAudio"
-        >
-          <i class="el-icon-view"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="showReadBar = !showReadBar"
-          v-if="speechAvalable && !isEpub && !isCarToon && !isAudio"
-        >
-          <i class="el-icon-headset"></i>
-        </div>
-        <div
-          class="float-btn"
-          :style="popupAbsoluteBtnStyle"
-          @click="toogleNight"
-        >
-          <i class="el-icon-moon" v-if="!isNight"></i>
-          <i class="el-icon-sunny" v-else></i>
+        <div class="float-right-btn-zone">
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="refreshContent"
+          >
+            <i class="el-icon-refresh-right"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toggleAutoReading()"
+            v-if="!isEpub && !isCarToon && !isAudio"
+          >
+            <i class="el-icon-view"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="showReadBar = !showReadBar"
+            v-if="speechAvalable && !isEpub && !isCarToon && !isAudio"
+          >
+            <i class="el-icon-headset"></i>
+          </div>
+          <div
+            class="float-btn"
+            :style="popupAbsoluteBtnStyle"
+            @click="toogleNight"
+          >
+            <i class="el-icon-moon" v-if="!isNight"></i>
+            <i class="el-icon-sunny" v-else></i>
+          </div>
         </div>
       </div>
       <div class="progress" v-if="$store.state.miniInterface && !isAudio">
@@ -422,9 +444,15 @@ import jump from "../plugins/jump";
 import Animate from "../plugins/animate";
 import { setCache, getCache } from "../plugins/cache";
 import { simplized, traditionalized } from "../plugins/chinese";
-import { LimitResquest, networkFirstRequest } from "../plugins/helper";
-import { defaultReplaceRule } from "../plugins/config.js";
+import {
+  LimitResquest,
+  networkFirstRequest,
+  editDistance
+} from "../plugins/helper";
+import { defaultReplaceRule, defaultBookmark } from "../plugins/config.js";
 import eventBus from "../plugins/eventBus";
+// eslint-disable-next-line no-useless-escape
+const symboRegex = /[\u2000-\u206F\u2E00-\u2E7F\\'!"#$%&\(\)*+,-\./:;<=>?@\[\]^_`{\|}~，。？《》；：、«]/g;
 
 export default {
   components: {
@@ -445,6 +473,47 @@ export default {
       }
     }
     window.addEventListener("unload", this.saveReadingPosition);
+    eventBus.$on("showSearchContent", data => {
+      if (this._inactive) {
+        return;
+      }
+      if (this.chapterIndex === data.chapterIndex) {
+        this.showMatchKeyword(data);
+        return;
+      }
+      if (this.isScrollRead) {
+        this.scrollStartChapterIndex = data.chapterIndex;
+        this.computeShowChapterList().then(() => {
+          this.showMatchKeyword(data);
+        });
+        return;
+      }
+      this.$once("showContent", () => {
+        this.showMatchKeyword(data);
+      });
+      this.getContent(data.chapterIndex);
+    });
+    eventBus.$on("showBookmark", bookmark => {
+      if (this._inactive) {
+        return;
+      }
+      // console.log(this.chapterIndex, bookmark);
+      if (this.chapterIndex === bookmark.chapterIndex) {
+        this.showBookmark(bookmark);
+        return;
+      }
+      if (this.isScrollRead) {
+        this.scrollStartChapterIndex = bookmark.chapterIndex;
+        this.computeShowChapterList().then(() => {
+          this.showBookmark(bookmark);
+        });
+        return;
+      }
+      this.$once("showContent", () => {
+        this.showBookmark(bookmark);
+      });
+      this.getContent(bookmark.chapterIndex);
+    });
   },
   activated() {
     this.init();
@@ -1107,7 +1176,8 @@ export default {
         book.index = index;
         this.$store.commit("setReadingBook", book);
       } catch (error) {
-        //
+        // eslint-disable-next-line no-console
+        console.error(error);
       }
       //强制滚回顶层
       this.toTop(0);
@@ -1934,12 +2004,35 @@ export default {
       }
       if (text && show) {
         setTimeout(() => {
-          if (this.$store.getters.config.selectionAction === "过滤弹窗") {
-            this.showTextFilterPrompt(text);
+          if (
+            this.$store.getters.config.selectionAction === "过滤弹窗" ||
+            this.$store.getters.config.selectionAction === "操作弹窗"
+          ) {
+            this.showTextOperate(text);
           }
         }, 200);
       }
       return text;
+    },
+    async showTextOperate(text) {
+      const res = await this.$confirm(`请选择操作?`, "提示", {
+        confirmButtonText: "添加过滤规则",
+        cancelButtonText: "添加书签",
+        type: "warning",
+        closeOnClickModal: false,
+        closeOnPressEscape: false,
+        distinguishCancelAndClose: true
+      }).catch(action => {
+        return action === "close" ? "close" : false;
+      });
+      if (res === "close") {
+        return;
+      }
+      if (res) {
+        return this.showTextFilterPrompt(text);
+      } else {
+        return this.showAddBookmark(text);
+      }
     },
     async showTextFilterPrompt(text) {
       if (this.showTextFilterPrompting) {
@@ -2008,6 +2101,60 @@ export default {
       //   }
       // }
       // this.showTextFilterPrompting = false;
+    },
+    async showAddBookmark(text) {
+      if (this.showAddBookmarking) {
+        return;
+      }
+      let pureText = text.replace(/^\s+/, "").replace(/\s+$/, "");
+      // console.log(pureText);
+      const paragraph = this.getContentMatchParagraph(pureText, 1, 0.7);
+      if (!paragraph) {
+        this.$message.error("选择1-2段整段文字才能定位段落");
+        return;
+      }
+      const paragraphLength = 5;
+      const paragraphTextLength = 150;
+      const paragraphList = [paragraph];
+      let bookText = paragraph.innerText + "\n";
+      if (
+        paragraphList.length < paragraphLength &&
+        bookText.length < paragraphTextLength
+      ) {
+        // 补全内容
+        let paragraphIndex = -1;
+        const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
+        for (let i = 0; i < list.length; i++) {
+          if (paragraphIndex > 0 && i > paragraphIndex) {
+            paragraphList.push(list[i]);
+            bookText += list[i].innerText + "\n";
+            if (
+              paragraphList.length >= paragraphLength ||
+              bookText.length >= paragraphTextLength
+            ) {
+              break;
+            }
+          } else if (paragraphList[paragraphList.length - 1] === list[i]) {
+            paragraphIndex = i;
+          }
+        }
+      }
+      // console.log(paragraphList, bookText);
+      bookText = bookText.replace(/\\n*$/, "");
+
+      const bookmark = Object.assign({}, defaultBookmark, {
+        bookName: this.$store.state.readingBook.bookName,
+        bookAuthor: this.$store.state.readingBook.author,
+        chapterIndex: this.chapterIndex,
+        chapterPos: this.currentPage,
+        chapterName: this.title,
+        bookText: bookText,
+        content: ""
+      });
+      this.showAddBookmarking = true;
+      eventBus.$emit("showBookmarkForm", bookmark, true, () => {
+        this.showAddBookmarking = false;
+      });
     },
     toogleNight() {
       if (this.isNight) {
@@ -2325,6 +2472,12 @@ export default {
           });
         }
       } else {
+        if (!this.$refs.bookContentRef) {
+          setTimeout(() => {
+            this.showPosition(pos, callback);
+          }, 10);
+          return;
+        }
         const list = this.$refs.bookContentRef.$el.querySelectorAll(
           ".reading-chapter h3,p"
         );
@@ -2701,6 +2854,176 @@ export default {
       } else {
         return traditionalized(text);
       }
+    },
+    showSearchBookContentDialog() {
+      let book = { ...this.$store.state.readingBook };
+      const shelfBook = this.$store.getters.shelfBooks.find(
+        v => v.bookUrl === book.bookUrl
+      );
+      book = Object.assign(book, shelfBook || {});
+      eventBus.$emit("showSearchBookContentDialog", book);
+    },
+    showMatchKeyword(data) {
+      if (this._inactive) {
+        return;
+      }
+      if (!this.$refs.bookContentRef) {
+        setTimeout(() => {
+          this.showMatchKeyword(data);
+        }, 10);
+        return;
+      }
+      try {
+        const list = this.$refs.bookContentRef.$el.querySelectorAll(
+          ".reading-chapter h3,p"
+        );
+        let matchCount = 0;
+        for (let i = 0; i < list.length; i++) {
+          const pContent = list[i].innerText;
+          let startIndex = -1;
+          let isFound = false;
+          // eslint-disable-next-line no-constant-condition
+          while (true) {
+            startIndex = pContent.indexOf(data.query, startIndex + 1);
+            if (startIndex >= 0) {
+              matchCount++;
+              if (matchCount === data.resultCountWithinChapter + 1) {
+                isFound = true;
+                this.showParagraph(list[i], true);
+                break;
+              }
+            } else {
+              break;
+            }
+          }
+          if (isFound) {
+            break;
+          }
+        }
+      } catch (error) {
+        // console.error(error);
+      }
+    },
+    getParagraphListInView() {
+      // 获取视口内的所有段落
+      const list = this.$refs.bookContentRef.$el.querySelectorAll("h3,p");
+      const paragraphList = [];
+      for (let i = 0; i < list.length; i++) {
+        const elePos = list[i].getBoundingClientRect();
+        if (this.isSlideRead) {
+          // 段尾出现在视野里
+          if (elePos.right > 0 && elePos.left > 0) {
+            paragraphList.push(list[i]);
+          }
+        } else {
+          // 段尾出现在视野里
+          if (
+            elePos.bottom >
+              30 +
+                20 +
+                (window.webAppDistance | 0) +
+                (this.$store.state.safeArea.top | 0) &&
+            elePos.bottom < this.windowSize.height
+          ) {
+            paragraphList.push(list[i]);
+          }
+        }
+      }
+      return paragraphList;
+    },
+    showBookmarkDialog() {
+      let book = { ...this.$store.state.readingBook };
+      const shelfBook = this.$store.getters.shelfBooks.find(
+        v => v.bookUrl === book.bookUrl
+      );
+      book = Object.assign(book, shelfBook || {});
+      eventBus.$emit("showBookmarkDialog", book);
+    },
+    getContentMatchParagraph(text, distance, minDistance) {
+      distance = distance || 0.7;
+      // 正则过滤标点符号后，近似匹配每一段内容
+      let paragraphList = text
+        .replace(/\\n+/g, "\n")
+        .split(/\n+/)
+        .map(v => v.replace(symboRegex, ""))
+        .filter(v => v);
+      try {
+        const list = this.$refs.bookContentRef.$el.querySelectorAll(
+          ".reading-chapter h3,p"
+        );
+        let paragraph = null;
+        for (let i = 0; i < list.length; i++) {
+          let isMatch = true;
+          let pos = 0;
+          let startPos = i;
+          for (let j = 0; j < paragraphList.length; j++) {
+            // 过滤所有字符
+            let content = null;
+            while (i + pos < list.length) {
+              content = list[i + pos].innerText.replace(symboRegex, "");
+              if (!content.length) {
+                pos++;
+                startPos++;
+              } else {
+                break;
+              }
+            }
+            if (!content) {
+              // 说明没找到有内容的段落，终止匹配
+              isMatch = false;
+              break;
+            }
+            const paragraphDistance = editDistance(content, paragraphList[j]);
+            if (paragraphDistance < distance) {
+              isMatch = false;
+              break;
+            } else {
+              pos++;
+            }
+          }
+          if (isMatch) {
+            paragraph = list[startPos];
+            break;
+          }
+        }
+        if (paragraph) {
+          return paragraph;
+        }
+        if (distance - 0.1 >= minDistance) {
+          return this.getContentMatchParagraph(
+            text,
+            distance - 0.1,
+            minDistance
+          );
+        }
+      } catch (error) {
+        // eslint-disable-next-line no-console
+        console.error(error);
+      }
+      return null;
+    },
+    showContentMatchParagraph(content) {
+      if (this._inactive) {
+        return;
+      }
+      const paragraph = this.getContentMatchParagraph(content, 1, 0.6);
+      if (paragraph) {
+        this.showParagraph(paragraph, true);
+      } else {
+        this.$message.error("无法定位内容所在段落");
+      }
+    },
+    showBookmark(bookmark) {
+      if (this._inactive) {
+        return;
+      }
+      if (!this.$refs.bookContentRef) {
+        setTimeout(() => {
+          this.showBookmark(bookmark);
+        }, 10);
+        return;
+      }
+      this.showContentMatchParagraph(bookmark.bookText);
     }
   }
 };
@@ -2828,7 +3151,7 @@ export default {
         pointer-events: all;
         margin-top: 20px;
 
-        .el-icon-top, .el-icon-bottom, .el-icon-info {
+        .el-icon-top, .el-icon-bottom, .el-icon-info, .el-icon-search, .el-icon-collection-tag {
           line-height: 36px;
         }
       }
@@ -3223,6 +3546,30 @@ export default {
   }
 }
 
+.chapter-wrapper {
+  .read-bar {
+    .float-btn-zone {
+      position: absolute;
+      bottom: 135px;
+      left: 4px;
+
+      .float-left-btn-zone {
+        position: relative;
+        left: auto;
+        bottom: auto;
+      }
+
+      .float-right-btn-zone {
+        position: relative;
+        left: auto;
+        bottom: auto;
+        margin-bottom: 20px;
+      }
+    }
+
+  }
+}
+
 .chapter-wrapper.mini-interface {
   padding: 0;
   position: relative;
@@ -3254,13 +3601,21 @@ export default {
       background: inherit;
     }
 
+    .float-btn-zone {
+      position: static;
+      bottom: 0;
+      left: 0;
+    }
+
     .float-left-btn-zone {
+      position: absolute;
       right: auto;
       left: 20px;
       bottom: 135px;
     }
 
     .float-right-btn-zone {
+      position: absolute;
       left: auto;
       right: 20px;
       bottom: 135px;
